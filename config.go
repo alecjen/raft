@@ -145,9 +145,6 @@ type Config struct {
 	// staggering, may be delayed as much as 2x this value.
 	CommitTimeout time.Duration
 
-	// ApplyChSize will buffer applyCh with the configured size.
-	ApplyChSize int
-
 	// MaxAppendEntries controls the maximum number of append entries
 	// to send at once. We want to strike a balance between efficiency
 	// and avoiding waste if the follower is going to reject because of
