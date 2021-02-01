@@ -163,6 +163,12 @@ func (r *Raft) runFollower() {
 			c.respond(ErrNotLeader)
 
 		case a := <-r.applyCh:
+			select {
+			case <-a.ctx.Done():
+				continue
+			default:
+				a.done <- struct{}{}
+			}
 			// Reject any operations since we are not the leader
 			a.respond(ErrNotLeader)
 
@@ -300,6 +306,12 @@ func (r *Raft) runCandidate() {
 			c.respond(ErrNotLeader)
 
 		case a := <-r.applyCh:
+			select {
+			case <-a.ctx.Done():
+				continue
+			default:
+				a.done <- struct{}{}
+			}
 			// Reject any operations since we are not the leader
 			a.respond(ErrNotLeader)
 
@@ -743,6 +755,13 @@ func (r *Raft) leaderLoop() {
 			b.respond(ErrCantBootstrap)
 
 		case newLog := <-r.applyCh:
+			select {
+			case <-newLog.ctx.Done():
+				continue
+			default:
+				newLog.done <- struct{}{}
+			}
+
 			if r.getLeadershipTransferInProgress() {
 				r.logger.Debug(ErrLeadershipTransferInProgress.Error())
 				newLog.respond(ErrLeadershipTransferInProgress)
@@ -754,6 +773,13 @@ func (r *Raft) leaderLoop() {
 			for i := 0; i < r.conf.MaxAppendEntries; i++ {
 				select {
 				case newLog := <-r.applyCh:
+					select {
+					case <-newLog.ctx.Done():
+						continue
+					default:
+						newLog.done <- struct{}{}
+					}
+
 					ready = append(ready, newLog)
 				default:
 					break GROUP_COMMIT_LOOP

@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"sync"
@@ -148,6 +149,8 @@ type logFuture struct {
 	log      Log
 	response interface{}
 	dispatch time.Time
+	ctx      context.Context
+	done     chan struct{}
 }
 
 func (l *logFuture) Response() interface{} {

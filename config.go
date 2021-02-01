@@ -146,9 +146,6 @@ type Config struct {
 	CommitTimeout time.Duration
 
 	// ApplyChSize will buffer applyCh with the configured size.
-	// Note that setting this to a non-zero value introduces a race condition
-	// in which the raft Apply reports a timeout error when sending to applyCh,
-	// but the log was actually sent.
 	ApplyChSize int
 
 	// MaxAppendEntries controls the maximum number of append entries

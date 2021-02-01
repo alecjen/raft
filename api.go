@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -673,10 +674,14 @@ func (r *Raft) Apply(cmd []byte, timeout time.Duration) ApplyFuture {
 func (r *Raft) ApplyLog(log Log, timeout time.Duration) ApplyFuture {
 	metrics.IncrCounter([]string{"raft", "apply"}, 1)
 
-	var timer <-chan time.Time
+	ctx := context.Background()
+	var cancel context.CancelFunc
 	if timeout > 0 {
-		timer = time.After(timeout)
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
 	}
+
+	done := make(chan struct{})
 
 	// Create a log future, no index or term yet
 	logFuture := &logFuture{
@@ -685,15 +690,19 @@ func (r *Raft) ApplyLog(log Log, timeout time.Duration) ApplyFuture {
 			Data:       log.Data,
 			Extensions: log.Extensions,
 		},
+		ctx:  ctx,
+		done: done,
 	}
 	logFuture.init()
 
+	r.applyCh <- logFuture
+
 	select {
-	case <-timer:
+	case <-ctx.Done():
 		return errorFuture{ErrEnqueueTimeout}
 	case <-r.shutdownCh:
 		return errorFuture{ErrRaftShutdown}
-	case r.applyCh <- logFuture:
+	case <-done:
 		return logFuture
 	}
 }
@@ -705,25 +714,34 @@ func (r *Raft) ApplyLog(log Log, timeout time.Duration) ApplyFuture {
 // must be run on the leader or it will fail.
 func (r *Raft) Barrier(timeout time.Duration) Future {
 	metrics.IncrCounter([]string{"raft", "barrier"}, 1)
-	var timer <-chan time.Time
+
+	ctx := context.Background()
+	var cancel context.CancelFunc
 	if timeout > 0 {
-		timer = time.After(timeout)
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
 	}
+
+	done := make(chan struct{})
 
 	// Create a log future, no index or term yet
 	logFuture := &logFuture{
 		log: Log{
 			Type: LogBarrier,
 		},
+		ctx:  ctx,
+		done: done,
 	}
 	logFuture.init()
 
+	r.applyCh <- logFuture
+
 	select {
-	case <-timer:
+	case <-ctx.Done():
 		return errorFuture{ErrEnqueueTimeout}
 	case <-r.shutdownCh:
 		return errorFuture{ErrRaftShutdown}
-	case r.applyCh <- logFuture:
+	case <-done:
 		return logFuture
 	}
 }
@@ -904,10 +922,14 @@ func (r *Raft) Snapshot() SnapshotFuture {
 // recovery into a fresh cluster, and should not be used in normal operations.
 func (r *Raft) Restore(meta *SnapshotMeta, reader io.Reader, timeout time.Duration) error {
 	metrics.IncrCounter([]string{"raft", "restore"}, 1)
-	var timer <-chan time.Time
+	ctx := context.Background()
+	var cancel context.CancelFunc
 	if timeout > 0 {
-		timer = time.After(timeout)
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
 	}
+
+	done := make(chan struct{})
 
 	// Perform the restore.
 	restore := &userRestoreFuture{
@@ -916,7 +938,7 @@ func (r *Raft) Restore(meta *SnapshotMeta, reader io.Reader, timeout time.Durati
 	}
 	restore.init()
 	select {
-	case <-timer:
+	case <-ctx.Done():
 		return ErrEnqueueTimeout
 	case <-r.shutdownCh:
 		return ErrRaftShutdown
@@ -937,12 +959,15 @@ func (r *Raft) Restore(meta *SnapshotMeta, reader io.Reader, timeout time.Durati
 		},
 	}
 	noop.init()
+
+	r.applyCh <- noop
+
 	select {
-	case <-timer:
+	case <-ctx.Done():
 		return ErrEnqueueTimeout
 	case <-r.shutdownCh:
 		return ErrRaftShutdown
-	case r.applyCh <- noop:
+	case <-done:
 		return noop.Error()
 	}
 }
