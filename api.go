@@ -695,15 +695,22 @@ func (r *Raft) ApplyLog(log Log, timeout time.Duration) ApplyFuture {
 	}
 	logFuture.init()
 
-	r.applyCh <- logFuture
-
 	select {
 	case <-ctx.Done():
 		return errorFuture{ErrEnqueueTimeout}
 	case <-r.shutdownCh:
 		return errorFuture{ErrRaftShutdown}
-	case <-done:
-		return logFuture
+	case r.applyCh <- logFuture:
+		// we may time out or shut down while
+		// applyCh is de-queueing the log
+		select {
+		case <-ctx.Done():
+			return errorFuture{ErrEnqueueTimeout}
+		case <-r.shutdownCh:
+			return errorFuture{ErrRaftShutdown}
+		case <-done:
+			return logFuture
+		}
 	}
 }
 
@@ -734,15 +741,22 @@ func (r *Raft) Barrier(timeout time.Duration) Future {
 	}
 	logFuture.init()
 
-	r.applyCh <- logFuture
-
 	select {
 	case <-ctx.Done():
 		return errorFuture{ErrEnqueueTimeout}
 	case <-r.shutdownCh:
 		return errorFuture{ErrRaftShutdown}
-	case <-done:
-		return logFuture
+	case r.applyCh <- logFuture:
+		// we may time out or shut down while
+		// applyCh is de-queueing the log
+		select {
+		case <-ctx.Done():
+			return errorFuture{ErrEnqueueTimeout}
+		case <-r.shutdownCh:
+			return errorFuture{ErrRaftShutdown}
+		case <-done:
+			return logFuture
+		}
 	}
 }
 
@@ -957,18 +971,27 @@ func (r *Raft) Restore(meta *SnapshotMeta, reader io.Reader, timeout time.Durati
 		log: Log{
 			Type: LogNoop,
 		},
+		ctx:  ctx,
+		done: done,
 	}
 	noop.init()
-
-	r.applyCh <- noop
 
 	select {
 	case <-ctx.Done():
 		return ErrEnqueueTimeout
 	case <-r.shutdownCh:
 		return ErrRaftShutdown
-	case <-done:
-		return noop.Error()
+	case r.applyCh <- noop:
+		// we may time out or shut down while
+		// applyCh is de-queueing the log
+		select {
+		case <-ctx.Done():
+			return ErrEnqueueTimeout
+		case <-r.shutdownCh:
+			return ErrRaftShutdown
+		case <-done:
+			return noop.Error()
+		}
 	}
 }
 
