@@ -786,6 +786,8 @@ func (r *Raft) leaderLoop() {
 				}
 			}
 
+			fmt.Println(len(ready), r.conf.MaxAppendEntries)
+
 			// Dispatch the logs
 			if stepDown {
 				// we're in the process of stepping down as leader, don't process anything new
@@ -793,7 +795,6 @@ func (r *Raft) leaderLoop() {
 					ready[i].respond(ErrNotLeader)
 				}
 			} else {
-				fmt.Println(len(r.applyCh), cap(r.applyCh))
 				r.dispatchLogs(ready)
 			}
 
