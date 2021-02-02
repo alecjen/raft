@@ -496,6 +496,8 @@ func NewRaft(conf *Config, fsm FSM, logs LogStore, stable StableStore, snaps Sna
 		return nil, fmt.Errorf("when running with ProtocolVersion < 3, LocalID must be set to the network address")
 	}
 
+	fmt.Println("creating new raft", conf.MaxAppendEntries)
+
 	// Create Raft struct.
 	r := &Raft{
 		protocolVersion:       protocolVersion,

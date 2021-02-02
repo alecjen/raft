@@ -793,6 +793,7 @@ func (r *Raft) leaderLoop() {
 					ready[i].respond(ErrNotLeader)
 				}
 			} else {
+				fmt.Println(len(r.applyCh), cap(r.applyCh))
 				r.dispatchLogs(ready)
 			}
 
