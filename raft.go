@@ -760,8 +760,6 @@ func (r *Raft) leaderLoop() {
 				}
 			}
 
-			fmt.Println(len(ready))
-
 			// Dispatch the logs
 			if stepDown {
 				// we're in the process of stepping down as leader, don't process anything new
